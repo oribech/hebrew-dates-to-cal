@@ -16,32 +16,86 @@ import * as Sharing from "expo-sharing";
 import HebrewDayPicker from "../components/HebrewDayPicker";
 import HebrewMonthPicker from "../components/HebrewMonthPicker";
 import YearsPicker from "../components/YearsPicker";
-import { generateEvents } from "../core/scheduler";
 import { buildIcs } from "../core/ics";
+import { generateEvents } from "../core/scheduler";
 
 type IcsOpenModule = {
   openIcsChooser: (fileUri: string, chooserTitle?: string) => Promise<void>;
+};
+
+type DraftEvent = {
+  id: number;
+  title: string;
+  day: number;
+  monthKey: string;
 };
 
 const { IcsOpenModule } = NativeModules as {
   IcsOpenModule?: IcsOpenModule;
 };
 
+function createDraftEvent(id: number): DraftEvent {
+  return {
+    id,
+    title: "",
+    day: 1,
+    monthKey: "tishrei",
+  };
+}
+
 export default function MainScreen() {
-  const [title, setTitle] = useState("");
-  const [day, setDay] = useState(1);
-  const [monthKey, setMonthKey] = useState("tishrei");
+  const [drafts, setDrafts] = useState<DraftEvent[]>([createDraftEvent(1)]);
+  const [nextId, setNextId] = useState(2);
   const [yearsAhead, setYearsAhead] = useState(10);
   const [busy, setBusy] = useState(false);
 
+  const updateDraft = (id: number, patch: Partial<DraftEvent>) => {
+    setDrafts((current) =>
+      current.map((draft) =>
+        draft.id === id ? { ...draft, ...patch } : draft,
+      ),
+    );
+  };
+
+  const addDraft = () => {
+    setDrafts((current) => [...current, createDraftEvent(nextId)]);
+    setNextId((current) => current + 1);
+  };
+
+  const removeDraft = (id: number) => {
+    setDrafts((current) =>
+      current.length === 1
+        ? current
+        : current.filter((draft) => draft.id !== id),
+    );
+  };
+
   const handleAddToCalendar = async () => {
-    if (!title.trim()) {
-      Alert.alert("שגיאה", "יש להזין שם לאירוע");
+    const activeDrafts = drafts.filter((draft) => draft.title.trim());
+
+    if (!activeDrafts.length) {
+      Alert.alert("שגיאה", "יש להזין לפחות אירוע אחד");
       return;
     }
+
     setBusy(true);
+
     try {
-      const events = generateEvents(title.trim(), day, monthKey, yearsAhead);
+      const events = activeDrafts
+        .flatMap((draft) =>
+          generateEvents(
+            draft.title.trim(),
+            draft.day,
+            draft.monthKey,
+            yearsAhead,
+          ),
+        )
+        .sort(
+          (left, right) =>
+            left.startDate.getTime() - right.startDate.getTime() ||
+            left.summary.localeCompare(right.summary, "he"),
+        );
+
       const icsContent = buildIcs(events);
       const file = new File(Paths.cache, "hebrew-dates.ics");
       file.create({ intermediates: true, overwrite: true });
@@ -92,31 +146,73 @@ export default function MainScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>תאריכים עבריים</Text>
           <Text style={styles.headerSubtitle}>
-            הוסף אירועים חוזרים לפי התאריך העברי
+            הוסף כמה אירועים חוזרים לפי התאריך העברי
           </Text>
         </View>
 
         <View style={styles.card}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>שם האירוע</Text>
-            <TextInput
-              style={styles.textInput}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="שם האירוע"
-              placeholderTextColor="#98b8d0"
-              textAlign="right"
-            />
-          </View>
+          {drafts.map((draft, index) => (
+            <View
+              key={draft.id}
+              style={[
+                styles.eventSection,
+                index > 0 && styles.eventSectionWithDivider,
+              ]}
+            >
+              {drafts.length > 1 ? (
+                <View style={styles.eventHeader}>
+                  <TouchableOpacity
+                    onPress={() => removeDraft(draft.id)}
+                    style={styles.removeButton}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.removeButtonText}>הסר</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.eventHeaderText}>אירוע {index + 1}</Text>
+                </View>
+              ) : null}
 
-          <View style={styles.row}>
-            <View style={styles.halfColumn}>
-              <HebrewMonthPicker value={monthKey} onChange={setMonthKey} />
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>שם האירוע</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={draft.title}
+                  onChangeText={(title) => updateDraft(draft.id, { title })}
+                  placeholder="שם האירוע"
+                  placeholderTextColor="#98b8d0"
+                  textAlign="right"
+                />
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfColumn}>
+                  <HebrewMonthPicker
+                    value={draft.monthKey}
+                    onChange={(monthKey) =>
+                      updateDraft(draft.id, { monthKey })
+                    }
+                  />
+                </View>
+                <View style={styles.halfColumn}>
+                  <HebrewDayPicker
+                    value={draft.day}
+                    onChange={(day) => updateDraft(draft.id, { day })}
+                  />
+                </View>
+              </View>
             </View>
-            <View style={styles.halfColumn}>
-              <HebrewDayPicker value={day} onChange={setDay} />
+          ))}
+
+          <TouchableOpacity
+            style={styles.addEventButton}
+            onPress={addDraft}
+            activeOpacity={0.85}
+          >
+            <View style={styles.addEventCircle}>
+              <Text style={styles.addEventPlus}>+</Text>
             </View>
-          </View>
+            <Text style={styles.addEventText}>הוסף אירוע נוסף</Text>
+          </TouchableOpacity>
 
           <YearsPicker value={yearsAhead} onChange={setYearsAhead} />
 
@@ -172,6 +268,37 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
+  eventSection: {
+    width: "100%",
+  },
+  eventSectionWithDivider: {
+    marginTop: 18,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: "#e5eff6",
+  },
+  eventHeader: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  eventHeaderText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#5a7d9a",
+  },
+  removeButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#eef5fb",
+  },
+  removeButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#4e88b8",
+  },
   inputContainer: {
     width: "100%",
     marginBottom: 16,
@@ -199,6 +326,38 @@ const styles = StyleSheet.create({
   },
   halfColumn: {
     flex: 1,
+  },
+  addEventButton: {
+    alignSelf: "center",
+    alignItems: "center",
+    marginTop: 6,
+    marginBottom: 18,
+  },
+  addEventCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#42c7c1",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#1b8f99",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addEventPlus: {
+    fontSize: 26,
+    lineHeight: 28,
+    fontWeight: "700",
+    color: "#fff",
+    marginTop: -1,
+  },
+  addEventText: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#3f8394",
   },
   button: {
     backgroundColor: "#3b8fd4",
