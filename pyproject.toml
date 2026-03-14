@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hebrew-dates-to-cal"
+version = "0.1.0"
+description = "Convert Hebrew-date CSV files into importable ICS calendars."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pyluach>=2.3,<3",
+]
+
+[project.scripts]
+hebrew-dates-to-cal = "hebrew_dates_to_cal.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hebrew_dates_to_cal*"]
