@@ -48,7 +48,7 @@ class CliRegressionTests(unittest.TestCase):
                 writer.writeheader()
                 writer.writerow({"hebrew_date": "כט סיון", "name": "אמא", "title": ""})
                 writer.writerow({"hebrew_date": "יח כסלו", "name": "ננה", "title": "אזכרה ל{name}"})
-                writer.writerow({"hebrew_date": "כו אלול", "name": "", "title": "יהשיר"})
+                writer.writerow({"hebrew_date": "כו אלול", "name": "יהשיר", "title": "אזכרה ל{name}"})
 
             subprocess.run(
                 [
@@ -70,7 +70,7 @@ class CliRegressionTests(unittest.TestCase):
             self.assertIn("BEGIN:VCALENDAR", calendar_text)
             self.assertIn("SUMMARY:יומהולדת לאמא", calendar_text)
             self.assertIn("SUMMARY:אזכרה לננה", calendar_text)
-            self.assertIn("SUMMARY:יהשיר", calendar_text)
+            self.assertIn("SUMMARY:אזכרה ליהשיר", calendar_text)
             self.assertIn("DTSTART;VALUE=DATE:20260614", calendar_text)
             self.assertIn("DTSTART;VALUE=DATE:20270704", calendar_text)
             self.assertIn("DTSTART;VALUE=DATE:20261128", calendar_text)
